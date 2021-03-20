@@ -39,6 +39,9 @@ print(x) # Outputs b'74657374' (hex encoding of "test")
 print(y) # Outputs 74657374
 """
 
+
+# the goal is this:  93.184.216.34
+
 def send_udp_message(message, address, port):
     """send_udp_message sends a message to UDP server
 
@@ -63,11 +66,49 @@ def format_hex(hex):
     return "\n".join(pairs)
 
 
-message = "AA AA 01 00 00 01 00 00 00 00 00 00 " \
-          "07 65 78 61 6d 70 6c 65 03 63 6f 6d 00 00 01 00 01"
+msg = "AA AA 01 00 00 01 00 00 00 00 00 00 " \
+      "07 65 78 61 6d 70 6c 65 03 63 6f 6d 00 00 01 00 01"
 
-response = send_udp_message(message, "8.8.8.8", 53)
-print(format_hex(response))
+
+def string_to_hex(section):
+    len_str = hex(len(section))[2:]
+    if len(len_str) == 1:
+        len_str = '0' + len_str
+    print("new length")
+    print(len_str)
+    bit_str = section.encode('utf-8')
+    print(bit_str)
+    bit_str = binascii.hexlify(bit_str)
+    bit_str = str(bit_str, 'ascii')
+    return len_str + bit_str
+
+
+def parse_string(query):
+    return_string = ""
+    array = query.split('.')
+
+    for value in array:
+        return_string = return_string + string_to_hex(value)
+    return return_string
+
+
+def parse_hex_ip(ip):
+    ip = hex(ip)
+    ip = ip[2:]
+    count = 4  # three periods
+    return_string = ""
+    while count > 0:
+        i = 0
+        temp_string = ""
+        for i in range(0, 2):
+            temp_string = temp_string + ip[0]
+            ip = ip[1:]
+        return_string = return_string + str(int(temp_string, 16))
+        return_string = return_string + '.'
+        count = count - 1
+
+    return return_string
+
 
 try:
     ss = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -84,23 +125,24 @@ try:
         while True:
             data = csockid.recv(512)
             data = data.decode('utf-8')
-            found_key = 0
-            for line in open(args.pairs_file, 'r'):
-                # trim the line to avoid weird new line things
-                line = line.strip()
-                if data in line:
-                    index = line.find(':')
-                    offset = line.index(data) + len(data)
-                    if offset == index:
-                        found_key = 1
-                        return_string = line[index + 1:]
-                        csockid.sendall(return_string.encode('utf-8'))
-            if found_key == 0:
-                csockid.sendall("NOT FOUND".encode('utf-8'))
-
+            formatted_url = parse_string(data)
+            #formatted_url = formatted_url[2:]
+            message = "AA AA 01 00 00 01 00 00 00 00 00 00 " + formatted_url + " 00 00 01 00 01"
+            print("my format")
+            print(message)
+            response = send_udp_message(message, "8.8.8.8", 53)
+            ip = int(response, 16)
+            ip = (ip & (pow(2, 32) - 1))
+            new_ip = parse_hex_ip(ip)
+            new_ip = new_ip[:len(new_ip) - 1]
+            csockid.sendall(new_ip.encode('utf-8'))
 except IOError as e:
     if e.errno == errno.EPIPE:
         exit()
 
 ss.close()
 exit()
+
+# create function that (for example takes the string www.example.come)
+# and parses by '.' and calls another function
+# which will return a string in hex composed of --> length + ascii encoding

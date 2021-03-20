@@ -36,6 +36,8 @@ with open(args.out_file, 'w') as write_file:
             answer = client_sock.recv(512)
             # decode answer
             answer = answer.decode('utf-8')
+            #delete line 40 after
+            print(answer)
             write_file.write(answer + '\n')
 
 # close the socket (note this will be visible to the other side)

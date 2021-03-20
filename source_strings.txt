@@ -1,0 +1,6 @@
+example.com
+google.com
+rutgers.edu
+www.facebook.com
+bbc.co.uk
+gmail.com
