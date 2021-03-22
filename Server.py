@@ -74,10 +74,9 @@ def string_to_hex(section):
     len_str = hex(len(section))[2:]
     if len(len_str) == 1:
         len_str = '0' + len_str
-    print("new length")
-    print(len_str)
+   
     bit_str = section.encode('utf-8')
-    print(bit_str)
+  
     bit_str = binascii.hexlify(bit_str)
     bit_str = str(bit_str, 'ascii')
     return len_str + bit_str
@@ -93,8 +92,8 @@ def parse_string(query):
 
 
 def parse_hex_ip(ip):
-    ip = hex(ip)
-    ip = ip[2:]
+   #ip = hex(ip)
+   #ip = ip[2:]
     count = 4  # three periods
     return_string = ""
     while count > 0:
@@ -110,6 +109,11 @@ def parse_hex_ip(ip):
     return return_string
 
 
+def findRDLength(response):
+    rdLength = response[12:16]
+    return int(rdLength)
+
+
 try:
     ss = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 except socket.error as err:
@@ -122,20 +126,28 @@ csockid, addr = ss.accept()
 
 try:
     with csockid:
-        while True:
-            data = csockid.recv(512)
-            data = data.decode('utf-8')
-            formatted_url = parse_string(data)
+        #while True:
+        data = csockid.recv(512)
+        data = data.decode('utf-8')
+        formatted_url = parse_string(data)
             #formatted_url = formatted_url[2:]
-            message = "AA AA 01 00 00 01 00 00 00 00 00 00 " + formatted_url + " 00 00 01 00 01"
-            print("my format")
-            print(message)
-            response = send_udp_message(message, "8.8.8.8", 53)
-            ip = int(response, 16)
-            ip = (ip & (pow(2, 32) - 1))
+        message = "AA AA 01 00 00 01 00 00 00 00 00 00 " + formatted_url + " 00 00 01 00 01"
+        print(formatted_url)  
+        response = send_udp_message(message, "8.8.8.8", 53)
+        print(response)
+        rdLength = findRDLength(response)
+        totalLength = rdLength*8
+        finalListofIPs = ""
+        while totalLength>0:
+            ip = response[-8:]
+            response = response[0:-8]
             new_ip = parse_hex_ip(ip)
             new_ip = new_ip[:len(new_ip) - 1]
-            csockid.sendall(new_ip.encode('utf-8'))
+            print(new_ip)
+            finalListofIPs = new_ip + "," + finalListofIPs
+            totalLength = totalLength - 8
+        finalListofIPs = finalListofIPs[:-1]
+        csockid.sendall(finalListofIPs.encode('utf-8'))
 except IOError as e:
     if e.errno == errno.EPIPE:
         exit()
@@ -146,3 +158,4 @@ exit()
 # create function that (for example takes the string www.example.come)
 # and parses by '.' and calls another function
 # which will return a string in hex composed of --> length + ascii encoding
+
