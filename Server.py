@@ -123,7 +123,17 @@ server_addr = ('', args.port)
 ss.bind(server_addr)
 ss.listen(1)
 csockid, addr = ss.accept()
+"""
+0000010001
+c00c 0005 0001 0000 0c66 0011 09737461722d6d696e690463313072c010c02e000100010000003b00041f0d4724
 
+
+0000010001
+    c00c00010001000000b3000497650051
+    c00c00010001000000b3000497654051
+    c00c00010001000000b3000497658051
+    c00c00010001000000b300049765c051
+"""
 try:
     with csockid:
         #while True:
@@ -132,7 +142,7 @@ try:
         formatted_url = parse_string(data)
             #formatted_url = formatted_url[2:]
         message = "AA AA 01 00 00 01 00 00 00 00 00 00 " + formatted_url + " 00 00 01 00 01"
-        print(formatted_url)  
+        print("aaaa81800001000200000000"+formatted_url)
         response = send_udp_message(message, "8.8.8.8", 53)
         print(response)
         rdLength = findRDLength(response)
