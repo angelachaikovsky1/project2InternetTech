@@ -3,6 +3,7 @@ import binascii
 from sys import argv
 import socket
 import errno
+import time
 
 # check to see if there is string matching the key in the pairs.txt file
 # if there is then send it back to the client
@@ -13,40 +14,10 @@ parser.add_argument('-p', type=str, help='This is the pairs file', default='Pair
 parser.add_argument('port', type=int, help='This is the port to connect to the client on', action='store')
 args = parser.parse_args(argv[1:])
 
-"""
-07 65 - 'example' has length 7, e
-78 61 - x, a
-6D 70 - m, p
-6C 65 - l, e
-03 63 - 'com' has length 3, c
-6F 6D - o, m
-00    - zero byte to end the QNAME
-00 01 - QTYPE
-00 01 - QCLASS
 
-x = b'test'
-x = binascii.hexlify(x)
-y = str(x,'ascii')
-
-print(x) # Outputs b'74657374' (hex encoding of "test")
-print(y) # Outputs 74657374
-
-x = b'test'
-x = binascii.hexlify(x)
-y = str(x,'ascii')
-
-print(x) # Outputs b'74657374' (hex encoding of "test")
-print(y) # Outputs 74657374
-"""
-
-
-# the goal is this:  93.184.216.34
-
+""" We copied this method from the https://routley.io/posts/hand-writing-dns-messages/ website """
 def send_udp_message(message, address, port):
-    """send_udp_message sends a message to UDP server
 
-    message should be a hexadecimal encoded string
-    """
     message = message.replace(" ", "").replace("\n", "")
     server_address = (address, port)
 
@@ -57,17 +28,6 @@ def send_udp_message(message, address, port):
     finally:
         sock.close()
     return binascii.hexlify(data).decode("utf-8")
-
-
-def format_hex(hex):
-    """format_hex returns a pretty version of a hex string"""
-    octets = [hex[i:i + 2] for i in range(0, len(hex), 2)]
-    pairs = [" ".join(octets[i:i + 2]) for i in range(0, len(octets), 2)]
-    return "\n".join(pairs)
-
-
-msg = "AA AA 01 00 00 01 00 00 00 00 00 00 " \
-      "07 65 78 61 6d 70 6c 65 03 63 6f 6d 00 00 01 00 01"
 
 
 def string_to_hex(section):
@@ -92,8 +52,7 @@ def parse_string(query):
 
 
 def parse_hex_ip(ip):
-   #ip = hex(ip)
-   #ip = ip[2:]
+
     count = 4  # three periods
     return_string = ""
     while count > 0:
@@ -123,49 +82,45 @@ server_addr = ('', args.port)
 ss.bind(server_addr)
 ss.listen(1)
 csockid, addr = ss.accept()
-"""
-0000010001
-c00c 0005 0001 0000 0c66 0011 09737461722d6d696e690463313072c010c02e000100010000003b00041f0d4724
 
-
-0000010001
-    c00c00010001000000b3000497650051
-    c00c00010001000000b3000497654051
-    c00c00010001000000b3000497658051
-    c00c00010001000000b300049765c051
-"""
 try:
     with csockid:
-        #while True:
-        data = csockid.recv(512)
-        data = data.decode('utf-8')
-        formatted_url = parse_string(data)
-            #formatted_url = formatted_url[2:]
-        message = "AA AA 01 00 00 01 00 00 00 00 00 00 " + formatted_url + " 00 00 01 00 01"
-        print("aaaa81800001000200000000"+formatted_url)
-        response = send_udp_message(message, "8.8.8.8", 53)
-        print(response)
-        rdLength = findRDLength(response)
-        totalLength = rdLength*8
-        finalListofIPs = ""
-        while totalLength>0:
-            ip = response[-8:]
-            response = response[0:-8]
-            new_ip = parse_hex_ip(ip)
-            new_ip = new_ip[:len(new_ip) - 1]
-            print(new_ip)
-            finalListofIPs = new_ip + "," + finalListofIPs
-            totalLength = totalLength - 8
-        finalListofIPs = finalListofIPs[:-1]
-        csockid.sendall(finalListofIPs.encode('utf-8'))
+        while True:
+            data = csockid.recv(512)
+            data = data.decode('utf-8')
+            if len(data) == 0:
+                break
+            formatted_url = parse_string(data)
+
+            message = "AA AA 01 00 00 01 00 00 00 00 00 00 " + formatted_url + " 00 00 01 00 01"
+
+            response = send_udp_message(message, "8.8.8.8", 53)
+
+            offset_length = len("aaaa818000010002000000000000010001") + len(formatted_url)
+            rdLength = findRDLength(response)
+            totalLength = rdLength
+            finalListofIPs = ""
+            response = response[offset_length:]
+            for i in range(0, rdLength):
+                type_msg = int(response[4:8], 16)
+                length_skip = int(response[20:24], 16) * 2
+                if type_msg == 1:
+                    #A record
+                    new_ip = response[24:32]
+                    new_ip = parse_hex_ip(new_ip)
+                    new_ip = new_ip[:len(new_ip) - 1]
+                    finalListofIPs = finalListofIPs + new_ip + ","
+                    response = response[24 + length_skip:]
+                else:
+                    #not A record
+                    finalListofIPs = finalListofIPs + "OTHER,"
+                    response = response[24+length_skip:]
+
+            finalListofIPs = finalListofIPs[:-1]
+            csockid.sendall(finalListofIPs.encode('utf-8'))
 except IOError as e:
     if e.errno == errno.EPIPE:
         exit()
 
 ss.close()
 exit()
-
-# create function that (for example takes the string www.example.come)
-# and parses by '.' and calls another function
-# which will return a string in hex composed of --> length + ascii encoding
-
